@@ -28,38 +28,30 @@ app.get('/test',async (req,res)=>{
     res.status(200).send('Webhook received');
 })
 app.post('/webhook', async (req, res) => {
-  const { action, sender, pull_request, ref } = req.body;
-  console.log(req.body,'-----------------32',req.headers)
-  let event = {};
+  const payload = req.body;
+  const { ref, pusher, commits } = payload;
 
-  if (action === 'push') {
-    event = {
-      action: 'PUSH',
-      author: sender.login,
-      to_branch: ref.split('/').pop(),
-      timestamp: new Date(),
+  // Check if it's a push event
+  if (payload.ref && payload.pusher) {
+    const author = pusher.name;
+    const toBranch = ref.split('/').pop();
+    const timestamp = new Date(commits[0].timestamp);
+
+    const formattedEvent = {
+      eventType: 'push',
+      author: author,
+      toBranch: toBranch,
+      timestamp: timestamp
     };
-  } else if (action === 'pull_request') {
-    event = {
-      action: 'PULL_REQUEST',
-      author: sender.login,
-      from_branch: pull_request.head.ref,
-      to_branch: pull_request.base.ref,
-      timestamp: new Date(),
-    };
-  } else if (action === 'merge') {
-    event = {
-      action: 'MERGE',
-      author: sender.login,
-      from_branch: pull_request.head.ref,
-      to_branch: pull_request.base.ref,
-      timestamp: new Date(),
-    };
+
+    // Store the event in MongoDB
+    const event = new WebhookEvent(formattedEvent);
+    await event.save();
+
+    res.status(200).send('Push event processed');
+  } else {
+    res.status(400).send('Unsupported event');
   }
-
-  const newEvent = new Event(event);
-  await newEvent.save();
-  res.status(200).send('Webhook received');
 });
 
 app.listen(8080, () => {
